@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>로또 번호 추천기</title>
+  <title>로또 & 동물상 테스트</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
   <style>
     :root {
       --bg1: #4f46e5;
@@ -261,6 +263,60 @@
       background: var(--empty-bg);
     }
 
+    /* 동물상 테스트 스타일 */
+    .animal-section {
+      margin-top: 40px;
+      padding-top: 40px;
+      border-top: 2px solid var(--line);
+    }
+
+    .webcam-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    #webcam-container {
+      width: 200px;
+      height: 200px;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      background: #000;
+      box-shadow: var(--shadow);
+    }
+
+    #label-container {
+      width: 100%;
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .label-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 600;
+    }
+
+    .progress-bar {
+      flex: 1;
+      height: 12px;
+      background: var(--line);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4f46e5, #9333ea);
+      width: 0%;
+      transition: width 0.2s ease;
+    }
+
     .toast {
       position: fixed;
       left: 50%;
@@ -350,6 +406,24 @@
       <div class="empty">
         아직 생성된 번호가 없습니다.<br />
         <strong>“번호 5세트 생성”</strong> 버튼을 눌러 시작하세요.
+      </div>
+    </section>
+
+    <!-- 동물상 테스트 섹션 -->
+    <section class="animal-section" aria-labelledby="animal-title">
+      <div class="header">
+        <div class="title-wrap">
+          <h1 id="animal-title">🐶🐱 동물상 테스트</h1>
+          <p class="subtitle">웹캠을 통해 강아지상인지 고양이상인지 확인해보세요!</p>
+        </div>
+        <div class="actions">
+          <button id="startWebcam" class="primary-btn" type="button">테스트 시작</button>
+        </div>
+      </div>
+
+      <div class="webcam-wrapper">
+        <div id="webcam-container"></div>
+        <div id="label-container" aria-live="polite"></div>
       </div>
     </section>
 
@@ -538,6 +612,71 @@
 
       generateBtn.addEventListener('click', handleGenerate);
       copyBtn.addEventListener('click', handleCopy);
+
+      // Animal Face Test Logic
+      const ANIMAL_URL = "https://teachablemachine.withgoogle.com/models/mkq1AWNx7/";
+      let animalModel, webcam, labelContainer, maxPredictions;
+
+      async function initAnimalTest() {
+        const startBtn = document.getElementById('startWebcam');
+        startBtn.disabled = true;
+        startBtn.textContent = '모델 로딩 중...';
+
+        const modelURL = ANIMAL_URL + "model.json";
+        const metadataURL = ANIMAL_URL + "metadata.json";
+
+        try {
+          animalModel = await tmImage.load(modelURL, metadataURL);
+          maxPredictions = animalModel.getTotalClasses();
+
+          const flip = true;
+          webcam = new tmImage.Webcam(200, 200, flip);
+          await webcam.setup();
+          await webcam.play();
+          window.requestAnimationFrame(animalLoop);
+
+          document.getElementById("webcam-container").appendChild(webcam.canvas);
+          labelContainer = document.getElementById("label-container");
+          labelContainer.innerHTML = ''; // Clear previous
+          for (let i = 0; i < maxPredictions; i++) {
+            const row = document.createElement("div");
+            row.className = 'label-row';
+            row.innerHTML = `
+              <span class="label-name" style="width: 60px;"></span>
+              <div class="progress-bar"><div class="progress-fill"></div></div>
+              <span class="label-prob" style="width: 40px;"></span>
+            `;
+            labelContainer.appendChild(row);
+          }
+          startBtn.textContent = '테스트 중...';
+        } catch (error) {
+          console.error(error);
+          showToast('웹캠을 시작할 수 없습니다. 권한을 확인해주세요.');
+          startBtn.disabled = false;
+          startBtn.textContent = '테스트 시작';
+        }
+      }
+
+      async function animalLoop() {
+        webcam.update();
+        await predictAnimal();
+        window.requestAnimationFrame(animalLoop);
+      }
+
+      async function predictAnimal() {
+        const prediction = await animalModel.predict(webcam.canvas);
+        for (let i = 0; i < maxPredictions; i++) {
+          const classPrediction = prediction[i].className;
+          const probability = (prediction[i].probability * 100).toFixed(0);
+          
+          const row = labelContainer.childNodes[i];
+          row.querySelector('.label-name').textContent = classPrediction;
+          row.querySelector('.progress-fill').style.width = probability + '%';
+          row.querySelector('.label-prob').textContent = probability + '%';
+        }
+      }
+
+      document.getElementById('startWebcam').addEventListener('click', initAnimalTest);
     })();
   </script>
 </body>
