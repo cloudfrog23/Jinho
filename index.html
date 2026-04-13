@@ -418,7 +418,8 @@
         </div>
         <div class="actions">
           <input type="file" id="imageUpload" accept="image/*" style="display: none;">
-          <button id="uploadBtn" class="primary-btn" type="button">이미지 선택</button>
+          <button id="uploadBtn" class="secondary-btn" type="button">이미지 선택</button>
+          <button id="predictBtn" class="primary-btn" type="button" disabled>동물상 분석하기</button>
         </div>
       </div>
 
@@ -623,14 +624,15 @@
 
       const imageUpload = document.getElementById('imageUpload');
       const uploadBtn = document.getElementById('uploadBtn');
+      const predictBtn = document.getElementById('predictBtn');
       const faceImage = document.getElementById('faceImage');
       const imagePlaceholder = document.getElementById('imagePlaceholder');
 
       async function loadAnimalModel() {
         if (animalModel) return;
         
-        uploadBtn.disabled = true;
-        uploadBtn.textContent = '모델 로딩 중...';
+        predictBtn.disabled = true;
+        predictBtn.textContent = '모델 로딩 중...';
         
         const modelURL = ANIMAL_URL + "model.json";
         const metadataURL = ANIMAL_URL + "metadata.json";
@@ -651,8 +653,7 @@
             `;
             labelContainer.appendChild(row);
           }
-          uploadBtn.disabled = false;
-          uploadBtn.textContent = '이미지 선택';
+          predictBtn.textContent = '동물상 분석하기';
         } catch (error) {
           console.error(error);
           showToast('모델을 불러오지 못했습니다.');
@@ -670,32 +671,46 @@
           faceImage.src = e.target.result;
           faceImage.style.display = 'block';
           imagePlaceholder.style.display = 'none';
-          
-          // 이미지가 로드된 후 예측 실행
-          faceImage.onload = async () => {
-            await predictAnimal(faceImage);
-          };
+          predictBtn.disabled = false; // 이미지 로드 완료 시 분석 버튼 활성화
         };
         reader.readAsDataURL(file);
       }
 
-      async function predictAnimal(imgElement) {
-        const prediction = await animalModel.predict(imgElement);
-        for (let i = 0; i < maxPredictions; i++) {
-          const classPrediction = prediction[i].className;
-          const probability = (prediction[i].probability * 100).toFixed(0);
-          
-          const row = labelContainer.childNodes[i];
-          row.querySelector('.label-name').textContent = classPrediction;
-          row.querySelector('.progress-fill').style.width = probability + '%';
-          row.querySelector('.label-prob').textContent = probability + '%';
+      async function predictAnimal() {
+        if (!animalModel || !faceImage.src || faceImage.src.includes('#')) {
+          showToast('먼저 이미지를 선택해주세요.');
+          return;
+        }
+
+        predictBtn.disabled = true;
+        predictBtn.textContent = '분석 중...';
+
+        try {
+          const prediction = await animalModel.predict(faceImage);
+          for (let i = 0; i < maxPredictions; i++) {
+            const classPrediction = prediction[i].className;
+            const probability = (prediction[i].probability * 100).toFixed(0);
+            
+            const row = labelContainer.childNodes[i];
+            row.querySelector('.label-name').textContent = classPrediction;
+            row.querySelector('.progress-fill').style.width = probability + '%';
+            row.querySelector('.label-prob').textContent = probability + '%';
+          }
+          showToast('분석이 완료되었습니다!');
+        } catch (error) {
+          console.error(error);
+          showToast('분석 중 오류가 발생했습니다.');
+        } finally {
+          predictBtn.disabled = false;
+          predictBtn.textContent = '동물상 분석하기';
         }
       }
 
       uploadBtn.addEventListener('click', () => imageUpload.click());
       imageUpload.addEventListener('change', handleImageUpload);
+      predictBtn.addEventListener('click', predictAnimal);
       
-      // 페이지 로드 시 모델 미리 로드 (선택 사항)
+      // 페이지 로드 시 모델 미리 로드
       loadAnimalModel();
     })();
   </script>
