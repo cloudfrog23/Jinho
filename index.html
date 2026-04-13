@@ -677,7 +677,12 @@
       }
 
       async function predictAnimal() {
-        if (!animalModel || !faceImage.src || faceImage.src.includes('#')) {
+        if (!animalModel) {
+          showToast('모델을 불러오는 중입니다. 잠시만 기다려주세요.');
+          await loadAnimalModel();
+        }
+
+        if (!faceImage.src || faceImage.src.includes('#')) {
           showToast('먼저 이미지를 선택해주세요.');
           return;
         }
@@ -686,23 +691,34 @@
         predictBtn.textContent = '분석 중...';
 
         try {
+          // 예측 실행
           const prediction = await animalModel.predict(faceImage);
+          
+          labelContainer = document.getElementById("label-container");
+          labelContainer.innerHTML = ''; // 기존 결과 초기화 후 다시 생성
+          
           for (let i = 0; i < maxPredictions; i++) {
             const classPrediction = prediction[i].className;
             const probability = (prediction[i].probability * 100).toFixed(0);
             
-            const row = labelContainer.childNodes[i];
-            row.querySelector('.label-name').textContent = classPrediction;
-            row.querySelector('.progress-fill').style.width = probability + '%';
-            row.querySelector('.label-prob').textContent = probability + '%';
+            const row = document.createElement("div");
+            row.className = 'label-row';
+            row.innerHTML = `
+              <span class="label-name" style="width: 60px; font-size: 0.9rem;">${classPrediction}</span>
+              <div class="progress-bar" style="flex: 1; height: 12px; background: var(--line); border-radius: 6px; overflow: hidden;">
+                <div class="progress-fill" style="width: ${probability}%; height: 100%; background: linear-gradient(90deg, #4f46e5, #9333ea); transition: width 0.5s ease;"></div>
+              </div>
+              <span class="label-prob" style="width: 40px; text-align: right; font-size: 0.9rem;">${probability}%</span>
+            `;
+            labelContainer.appendChild(row);
           }
           showToast('분석이 완료되었습니다!');
         } catch (error) {
-          console.error(error);
-          showToast('분석 중 오류가 발생했습니다.');
+          console.error('Analysis Error:', error);
+          showToast('분석 중 오류가 발생했습니다. 다시 시도해주세요.');
         } finally {
           predictBtn.disabled = false;
-          predictBtn.textContent = '동물상 분석하기';
+          predictBtn.textContent = '결과 보기';
         }
       }
 
