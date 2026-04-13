@@ -414,15 +414,19 @@
       <div class="header">
         <div class="title-wrap">
           <h1 id="animal-title">🐶🐱 동물상 테스트</h1>
-          <p class="subtitle">웹캠을 통해 강아지상인지 고양이상인지 확인해보세요!</p>
+          <p class="subtitle">사진을 업로드하여 강아지상인지 고양이상인지 확인해보세요!</p>
         </div>
         <div class="actions">
-          <button id="startWebcam" class="primary-btn" type="button">테스트 시작</button>
+          <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+          <button id="uploadBtn" class="primary-btn" type="button">이미지 선택</button>
         </div>
       </div>
 
       <div class="webcam-wrapper">
-        <div id="webcam-container"></div>
+        <div id="image-container">
+          <img id="faceImage" src="#" alt="미리보기" style="display: none; width: 100%; height: 100%; object-fit: cover;">
+          <div id="image-placeholder" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 0.9rem;">이미지를 선택해주세요</div>
+        </div>
         <div id="label-container" aria-live="polite"></div>
       </div>
     </section>
@@ -613,31 +617,30 @@
       generateBtn.addEventListener('click', handleGenerate);
       copyBtn.addEventListener('click', handleCopy);
 
-      // Animal Face Test Logic
+      // Animal Face Test Logic (Image Upload Version)
       const ANIMAL_URL = "https://teachablemachine.withgoogle.com/models/mkq1AWNx7/";
-      let animalModel, webcam, labelContainer, maxPredictions;
+      let animalModel, labelContainer, maxPredictions;
 
-      async function initAnimalTest() {
-        const startBtn = document.getElementById('startWebcam');
-        startBtn.disabled = true;
-        startBtn.textContent = '모델 로딩 중...';
+      const imageUpload = document.getElementById('imageUpload');
+      const uploadBtn = document.getElementById('uploadBtn');
+      const faceImage = document.getElementById('faceImage');
+      const imagePlaceholder = document.getElementById('imagePlaceholder');
 
+      async function loadAnimalModel() {
+        if (animalModel) return;
+        
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = '모델 로딩 중...';
+        
         const modelURL = ANIMAL_URL + "model.json";
         const metadataURL = ANIMAL_URL + "metadata.json";
-
+        
         try {
           animalModel = await tmImage.load(modelURL, metadataURL);
           maxPredictions = animalModel.getTotalClasses();
-
-          const flip = true;
-          webcam = new tmImage.Webcam(200, 200, flip);
-          await webcam.setup();
-          await webcam.play();
-          window.requestAnimationFrame(animalLoop);
-
-          document.getElementById("webcam-container").appendChild(webcam.canvas);
+          
           labelContainer = document.getElementById("label-container");
-          labelContainer.innerHTML = ''; // Clear previous
+          labelContainer.innerHTML = '';
           for (let i = 0; i < maxPredictions; i++) {
             const row = document.createElement("div");
             row.className = 'label-row';
@@ -648,23 +651,36 @@
             `;
             labelContainer.appendChild(row);
           }
-          startBtn.textContent = '테스트 중...';
+          uploadBtn.disabled = false;
+          uploadBtn.textContent = '이미지 선택';
         } catch (error) {
           console.error(error);
-          showToast('웹캠을 시작할 수 없습니다. 권한을 확인해주세요.');
-          startBtn.disabled = false;
-          startBtn.textContent = '테스트 시작';
+          showToast('모델을 불러오지 못했습니다.');
         }
       }
 
-      async function animalLoop() {
-        webcam.update();
-        await predictAnimal();
-        window.requestAnimationFrame(animalLoop);
+      async function handleImageUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        await loadAnimalModel();
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          faceImage.src = e.target.result;
+          faceImage.style.display = 'block';
+          imagePlaceholder.style.display = 'none';
+          
+          // 이미지가 로드된 후 예측 실행
+          faceImage.onload = async () => {
+            await predictAnimal(faceImage);
+          };
+        };
+        reader.readAsDataURL(file);
       }
 
-      async function predictAnimal() {
-        const prediction = await animalModel.predict(webcam.canvas);
+      async function predictAnimal(imgElement) {
+        const prediction = await animalModel.predict(imgElement);
         for (let i = 0; i < maxPredictions; i++) {
           const classPrediction = prediction[i].className;
           const probability = (prediction[i].probability * 100).toFixed(0);
@@ -676,7 +692,11 @@
         }
       }
 
-      document.getElementById('startWebcam').addEventListener('click', initAnimalTest);
+      uploadBtn.addEventListener('click', () => imageUpload.click());
+      imageUpload.addEventListener('change', handleImageUpload);
+      
+      // 페이지 로드 시 모델 미리 로드 (선택 사항)
+      loadAnimalModel();
     })();
   </script>
 </body>
